@@ -1,0 +1,9 @@
+module NetworkModel where
+
+open import Data.List using (List; []; _∷_; [_]; _++_)
+open import Data.List.Properties using ()
+open import Data.List.Relation.Binary.Permutation.Propositional
+  using (_↭_; ↭-refl; ↭-sym; ↭-trans)
+
+open import Data.List.Relation.Unary.Unique.Setoid
+  using (Unique)

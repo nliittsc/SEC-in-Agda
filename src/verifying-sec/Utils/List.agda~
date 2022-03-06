@@ -1,0 +1,5 @@
+module Utils.Lists where
+
+open import Data.List using (List; []; _∷_)
+opent import Data.List.Relation.Unary.AllPairs
+  using (AllPairs)

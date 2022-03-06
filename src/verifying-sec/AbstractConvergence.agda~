@@ -1,0 +1,124 @@
+module AbstractConvergence where
+open import Relation.Nullary using (¬_)
+open import Data.Nat using (ℕ; zero; suc)
+open import Data.List using (List; []; _∷_; [_]; _++_; foldl; foldr; map; InitLast; _∷ʳ_; _∷ʳ′_)
+open import Data.List.Relation.Unary.All using (All)
+open import Data.List.Relation.Unary.All.Properties using ()
+open import Data.List.Membership.Propositional using (_∈_)
+open import Data.List.Relation.Binary.Permutation.Propositional
+  using (_↭_; ↭-refl; ↭-sym; ↭-trans)
+open import Data.List.Relation.Binary.Permutation.Propositional.Properties
+  using ()
+open import Data.List.Relation.Unary.Unique.Setoid
+  using (Unique)
+open import Relation.Binary.Bundles
+  using (StrictPartialOrder; TotalPreorder)
+open import Relation.Binary.Structures
+  using (IsStrictPartialOrder; IsTotalPreorder; IsEquivalence)
+open import Level using (Level; 0ℓ)
+open import Data.Maybe using (Maybe; just; nothing; _>>=_)
+import Relation.Binary.PropositionalEquality as Eq
+open Eq using (_≡_; refl; sym; trans; cong; subst; cong-app)
+open Eq.≡-Reasoning using (begin_; _≡⟨⟩_; step-≡; _∎)
+
+open import Utils.List using (Distinct)
+open import Utils.Arrow using (_▷_)
+
+
+private
+  variable
+    A B C : Set
+    Oper State : Set
+
+_≢_ : A → A → Set
+x ≢ y = ¬ (x ≡ y)
+
+
+module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
+                      (_≼_ : Oper → Oper → Set)  -- hb-weak
+                      (isTotalPreorder : IsTotalPreorder _≈_ _≼_)
+                      (_≺_ : Oper → Oper → Set)  -- hb
+                      (isStrictPartialOrder : IsStrictPartialOrder _≈_ _≺_)
+                      (interp : Oper → State → Maybe State) where
+
+  ⟨_⟩ : Oper → State → Maybe State
+  ⟨ x ⟩ = interp x
+
+  -- Definition of concurrency
+  record _∥_ (x y : Oper) : Set where
+
+    field
+      ¬x≺y : ¬ (x ≺ y)
+      ¬y≺x : ¬ (y ≺ x)
+      
+
+  -- Happens-Before Consistent Lists and Lemmas
+  data HB-consistent : List Oper → Set where
+
+    []-consistent : HB-consistent []
+    append-consistent : ∀ {y xs}
+      → All (λ x → ¬ y ≺ x) xs
+      → HB-consistent (xs ∷ʳ y)
+
+
+  hb-consistent-++ˡ : ∀ xs ys → InitLast xs → InitLast ys → HB-consistent (xs ++ ys) → HB-consistent xs
+  hb-consistent-++ˡ .[] ys [] lastys ≺-xs++ys = {!!}
+  hb-consistent-++ˡ .(xs ∷ʳ x) ys (xs ∷ʳ′ x) lastys ≺-xs++ys = {!!}
+
+  hb-consistent-++ʳ : ∀ xs ys → HB-consistent (xs ++ ys) → HB-consistent ys
+  hb-consistent-++ʳ xs ys ≺-xs++ys = {!!}
+
+  -- End HB-Consistent Lemmas
+
+
+  -- custom length for happens before lists
+ -- hb-length : ∀ xs → HB-consistent xs → ℕ
+ -- hb-length .[] []-consistent = zero
+  --hb-length .(_ ∷ʳ _) (append-consistent x x₁) = {!!}
+
+  -- Applies a list of operations to a starting state
+  apply-ops : List Oper → State → Maybe State
+  apply-ops ops = foldl (_▷_) just (map interp ops)
+  --apply-ops ops = foldr (_▷_) just (map interp ops)
+
+  data concurrent-ops-commute : List Oper → Set where
+    commuting-constructor : ∀{x y xs}
+      → x ∈ xs → y ∈ xs  -- officially should be {x,y}⊆xs
+      → x ∥ y
+      → (∀(z : State) → (⟨ x ⟩ ▷ ⟨ y ⟩) z ≡ (⟨ y ⟩ ▷ ⟨ x ⟩) z)
+      → concurrent-ops-commute xs
+
+
+
+
+  -- the BIG theorem
+  convergence : ∀ n xs ys →
+                xs ↭ ys →
+                Distinct xs →
+                Distinct ys →
+                (≺-xs : HB-consistent xs) →
+                (≺-ys : HB-consistent ys) →
+                --n ≡ hb-length xs ≺-xs →
+                (∀(z : State) → apply-ops xs z ≡ apply-ops ys z)
+  convergence n xs ys xs↭ys !xs !ys ≺-xs ≺-ys z = {!!}
+
+
+
+
+
+  -- Represents the proposition that a data structure
+  -- is strongly eventually consistent
+  record IsSEC (op-history : List Oper → Set)
+               (init-state : State)
+               : Set where
+
+    field
+      causality : ∀ xs → op-history xs → HB-consistent xs
+      distinctness : ∀ xs → op-history xs → Distinct xs
+      trunc-history : ∀ x xs → op-history (xs ++ [ x ]) → op-history xs
+      commutativity : ∀ xs → op-history xs → concurrent-ops-commute xs
+      no-failure : ∀ x xs state
+        → op-history (xs ++ [ x ])
+        → apply-ops xs init-state ≡ just state
+        → ⟨ x ⟩ state ≢ nothing
+  
