@@ -20,17 +20,17 @@ open import Data.List.Relation.Unary.Linked
 open import Data.List.Relation.Unary.Linked.Properties
   using (++⁺; AllPairs⇒Linked; Linked⇒AllPairs)
 open import Data.List.Relation.Unary.All using (All)
-open import Data.List.Relation.Unary.All.Properties using ()
+open import Data.List.Relation.Unary.All.Properties --using ()
 open import Data.List.Relation.Unary.AllPairs using (AllPairs)
 open import Data.List.Relation.Unary.AllPairs.Properties
   renaming (++⁺ to ++-pairs)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.List.Relation.Binary.Permutation.Propositional
-  using (_↭_; ↭-refl; ↭-sym; ↭-trans)
+  using (_↭_; ↭-refl; ↭-sym; ↭-trans; prep; swap)
 open import Data.List.Relation.Binary.Permutation.Propositional.Properties
-  using (↭-empty-inv; ↭-singleton-inv; ¬x∷xs↭[]; drop-∷)
+  using (↭-empty-inv; ↭-singleton-inv; ¬x∷xs↭[]; drop-∷; All-resp-↭)
   renaming (++-identityˡ to ↭-++-identityˡ; ++-identityʳ to ↭-++-identityʳ)
-open import Data.List.Relation.Unary.Unique.Setoid
+open import Data.List.Relation.Unary.Unique.Propositional
   using (Unique)
 open import Relation.Binary.Bundles
   using (StrictPartialOrder; TotalPreorder)
@@ -42,11 +42,20 @@ open import Data.Maybe.Relation.Binary.Connected
   using (Connected; just; nothing; just-nothing; nothing-just)
 import Relation.Binary.PropositionalEquality as Eq
 open Eq using (_≡_; refl; sym; trans; cong; cong₂; subst; cong-app; subst₂)
+open import Relation.Binary.PropositionalEquality.Properties using (setoid)
 open Eq.≡-Reasoning using (begin_; _≡⟨⟩_; step-≡; _∎)
 
 
-open import Utils.List using (Distinct)
+--open import Utils.List using (Distinct)
 open import Utils.Arrow using (_▷_; _◁_)
+
+
+-- Useful rewrite rules
+xs++[]≡xs : ∀ {A : Set} → (xs : List A) → xs ++ [] ≡ xs
+xs++[]≡xs [] = refl
+xs++[]≡xs (x ∷ xs) rewrite xs++[]≡xs xs = refl
+
+{-# REWRITE xs++[]≡xs #-}
 
 private
   variable
@@ -57,16 +66,29 @@ private
 _≢_ : A → A → Set
 x ≢ y = ¬ (x ≡ y)
 
--- lmao this works?
-pattern ∅ = ()
+≢-sym : ∀ {x y : A} → x ≢ y → y ≢ x
+≢-sym x≢y = λ y≡x → x≢y (sym y≡x)
+
+unique-head-elim : ∀ {x : A} xs → Unique (x ∷ xs) → Unique xs
+unique-head-elim [] unique-x∷xs = AllPairs.[]
+unique-head-elim (x ∷ xs) (f AllPairs.∷ unique-x∷xs) = unique-x∷xs
+
+-- unique permutations are unique
+unique-permutation : ∀ (xs ys : List A) → Unique xs → xs ↭ ys → Unique ys
+unique-permutation .[] ys AllPairs.[] xs↭ys = subst Unique (sym (↭-empty-inv (↭-sym xs↭ys))) AllPairs.[]
+unique-permutation .(_ ∷ _) [] (x AllPairs.∷ unique-xs) xs↭ys = AllPairs.[]
+unique-permutation .(x₁ ∷ ys) (x₁ ∷ ys) (x AllPairs.∷ unique-xs) _↭_.refl = x AllPairs.∷ unique-xs
+unique-permutation .(x₁ ∷ _) (x₁ ∷ ys) (x AllPairs.∷ unique-xs) (prep .x₁ xs↭ys) =
+  All-resp-↭ xs↭ys x AllPairs.∷ (unique-permutation _ _ unique-xs xs↭ys)
+unique-permutation .(_ ∷ x₁ ∷ _) (x₁ ∷ .(_ ∷ _)) ((px All.∷ x) AllPairs.∷ x₂ AllPairs.∷ unique-xs) (swap _ .x₁ xs↭ys) =
+  (≢-sym px All.∷ All-resp-↭ xs↭ys x₂) AllPairs.∷ (All-resp-↭ xs↭ys x AllPairs.∷ (unique-permutation _ _ unique-xs xs↭ys))
+unique-permutation .(_ ∷ _) (x₁ ∷ ys) (x AllPairs.∷ unique-xs) (_↭_.trans xs↭ys xs↭ys₁) =
+  unique-permutation _ _ (unique-permutation _ _ ((x AllPairs.∷ unique-xs)) xs↭ys) xs↭ys₁
 
 
--- Useful rewrite rules
-xs++[]≡xs : ∀ {A : Set} → (xs : List A) → xs ++ [] ≡ xs
-xs++[]≡xs [] = refl
-xs++[]≡xs (x ∷ xs) rewrite xs++[]≡xs xs = refl
 
-{-# REWRITE xs++[]≡xs #-}
+
+
 
 -- Silly lemma
 x∷xs≢[] : ∀{x : A} {xs : List A} → (x ∷ xs) ≢ []
@@ -280,11 +302,9 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
   -- CRUCIAL PREFIX/SUFFIX LEMMA
   ∃-prefix-suffix : ∀ {y : A} xs ys →
                        y ∷ ys ↭ xs →
-                       Distinct xs →
-                       Distinct (y ∷ ys) →
                        ∃[ prefix ] (∃[ suffix ] xs ≡ suffix ++ y ∷ prefix)
-  ∃-prefix-suffix [] ys y∷ys↭xs !xs !y∷ys = ⊥-elim (¬x∷xs↭[] y∷ys↭xs)
-  ∃-prefix-suffix {y = y} (x ∷ []) ys y∷ys↭xs !xs !y∷ys = [] , ([] , proof)
+  ∃-prefix-suffix [] ys y∷ys↭xs  = ⊥-elim (¬x∷xs↭[] y∷ys↭xs)
+  ∃-prefix-suffix {y = y} (x ∷ []) ys y∷ys↭xs = [] , ([] , proof)
     where
       lemma₁ : ∀{x y : A} ys → y ∷ ys ↭ x ∷ [] → ys ≡ []
       lemma₁ [] fact = refl
@@ -297,7 +317,7 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
       proof : x ∷ [] ≡ [] ++ y ∷ []
       proof = ↭-singleton-inv (↭-sym (subst₂ _↭_ (cong (y ∷_) (lemma₁ _ y∷ys↭xs)) refl y∷ys↭xs))
 
-  ∃-prefix-suffix (x₁ ∷ x₂ ∷ xs) ys y∷ys↭xs !xs !y∷ys = {!!} , ({!!} , {!!})
+  ∃-prefix-suffix (x₁ ∷ x₂ ∷ xs) ys y∷ys↭xs = {!!} , ({!!} , {!!})
 
   -- END CRUCIAL LEMMA
 
@@ -358,9 +378,9 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
   cc-ops-cc-set : ∀ x prefix suffix →
                   concurrent-ops-commute (x ∷ suffix ++ prefix) →
                   concurrent-set (x ∷ suffix) →
-                  Distinct (x ∷ suffix ++ prefix) →
+                  Unique (x ∷ suffix ++ prefix) →
                   (∀(s : State) → apply-ops (suffix ++ x ∷ prefix) s ≡ apply-ops (x ∷ suffix ++ prefix) s)
-  cc-ops-cc-set = ?      
+  cc-ops-cc-set = {!!}      
 
   -- Bunch of Lemmas I don't have time to prove
   
@@ -370,8 +390,8 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
                 xs ↭ ys →
                 concurrent-ops-commute xs →
                 concurrent-ops-commute ys →
-                Distinct xs →
-                Distinct ys →
+                Unique xs →
+                Unique ys →
                 (hb-xs : hb-consistent xs) →
                 (hb-ys : hb-consistent ys) →
                 (∀(s₀ : State) → apply-ops xs s₀ ≡ apply-ops ys s₀)
@@ -379,18 +399,21 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
   convergence xs .(_ ∷ []) xs↭ys cc-xs cc-ys !xs !ys hb-xs [-] s₀ = cong₂ apply-ops (↭-singleton-inv xs↭ys) refl
   convergence xs (y₂ ∷ y₁ ∷ ys) xs↭ys cc-xs cc-ys !xs !ys hb-xs (y₂*≻y₁ Linked.∷ hb-y₁∷ys) s₀ =
     let found-prefix-suffix : ∃[ prefix ]( ∃[ suffix ] xs ≡ suffix ++ y₂ ∷ prefix )
-        found-prefix-suffix = ∃-prefix-suffix xs (y₁ ∷ ys) (↭-sym xs↭ys) !xs !ys
+        found-prefix-suffix = ∃-prefix-suffix xs (y₁ ∷ ys) (↭-sym xs↭ys)
         prefix = proj₁ found-prefix-suffix
         suffix = proj₁ (proj₂ found-prefix-suffix)
         xs≡suffix++y₂∷prefix = proj₂ (proj₂ found-prefix-suffix)
 
+        fact₀ : concurrent-ops-commute (suffix ++ y₂ ∷ prefix)
+        fact₀ = {!!}
+
         fact₁ : concurrent-ops-commute (y₂ ∷ suffix ++ prefix)
-        fact₁ = {!!}
+        fact₁ = cc-ops-rearrange₂ _ _ fact₀
 
         fact₂ : concurrent-set (y₂ ∷ suffix)
         fact₂ = {!!}
 
-        fact₃ : Distinct (y₂ ∷ suffix ++ prefix)
+        fact₃ : Unique (y₂ ∷ suffix ++ prefix)
         fact₃ = {!!}
 
         suf++pre↭y₁∷ys : suffix ++ prefix ↭ y₁ ∷ ys
@@ -407,12 +430,14 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
 
         l₂ : concurrent-ops-commute (y₁ ∷ ys)
         l₂ = cc-ops-commute-∷⁻ y₂ (y₁ ∷ ys) cc-ys
-        
-        l₃ : Distinct (suffix ++ prefix)
-        l₃ = {!!}
 
-        l₄ : Distinct (y₁ ∷ ys)
-        l₄ = {!!}
+        l₄ : Unique (y₁ ∷ ys)
+        l₄ = unique-head-elim _ !ys
+        
+        l₃ : Unique (suffix ++ prefix)
+        l₃ = unique-permutation _ _ l₄ (↭-sym suf++pre↭y₁∷ys)
+
+        
 
         l₅ : hb-consistent (suffix ++ prefix)
         l₅ = {!!}
@@ -449,7 +474,7 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
 
     field
       causality : ∀ xs → op-history xs → hb-consistent xs
-      distinctness : ∀ xs → op-history xs → Distinct xs
+      distinctness : ∀ xs → op-history xs → Unique xs
       trunc-history : ∀ x xs → op-history (x ∷ xs) → op-history xs
       commutativity : ∀ xs → op-history xs → concurrent-ops-commute xs
       no-failure : ∀ x xs state →
