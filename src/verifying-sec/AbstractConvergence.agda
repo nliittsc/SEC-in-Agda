@@ -18,7 +18,8 @@ open import Data.List.Relation.Unary.Linked
   using (Linked; [-])
   renaming (head to linkedHead; tail to linkedTail; head′ to linkedHead';  _∷′_ to _∷ᴸ_)
 open import Data.List.Relation.Unary.Linked.Properties
-  using (++⁺; AllPairs⇒Linked; Linked⇒AllPairs)
+  using (AllPairs⇒Linked; Linked⇒AllPairs)
+  renaming (++⁺ to ++-linked)
 open import Data.List.Relation.Unary.All using (All)
 open import Data.List.Relation.Unary.All.Properties --using ()
 open import Data.List.Relation.Unary.AllPairs using (AllPairs)
@@ -49,6 +50,10 @@ open Eq.≡-Reasoning using (begin_; _≡⟨⟩_; step-≡; _∎)
 --open import Utils.List using (Distinct)
 open import Utils.Arrow using (_▷_; _◁_)
 
+--infixr 4 _◁_
+
+
+
 
 -- Useful rewrite rules
 xs++[]≡xs : ∀ {A : Set} → (xs : List A) → xs ++ [] ≡ xs
@@ -61,6 +66,9 @@ private
   variable
     A B C : Set
     Oper State : Set
+
+
+
 
 
 _≢_ : A → A → Set
@@ -135,6 +143,10 @@ bad↭ (_↭_.trans s₁ s₂) with ↭-singleton-inv s₂
 ... | refl = bad↭ s₁
 
 
+
+
+
+
 module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
                       (_≼_ : Oper → Oper → Set)  -- hb-weak
                       (isTotalPreorder : IsTotalPreorder _≈_ _≼_)
@@ -191,10 +203,17 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
   concurrent-set : ∀(xs : List Oper) → Set
   concurrent-set xs = Linked _∥_ xs
 
+  cc-set-rearrange-head : ∀ x y xs → concurrent-set (x ∷ y ∷ xs) → concurrent-set (y ∷ x ∷ xs)
+  cc-set-rearrange-head x y xs cc-set = ∥-sym x∥y Linked.∷ {!!}
+    where
+      x∥y = linkedHead cc-set
+      
+      
+
   -- This relation is the closure of happens-before and concurrency
   data _≺*_ (x y : Oper) : Set where
 
-    x-hb-y : x ≺ y → x ≺* y
+    x-hb-y :  x ≺ y → x ≺* y
 
     x-concurrent-y : x ∥ y → x ≺* y
 
@@ -202,7 +221,8 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
 
     y-hb-x : x ≻ y → x *≻ y
 
-    x-concurrent-y : y ∥ x → x *≻ y
+    x-concurrent-y :  y ∥ x → x *≻ y
+
 
   -- The definition of happens-before consistent list
   hb-consistent : ∀(xs : List Oper) → Set
@@ -275,7 +295,7 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
 
   rev-lemma₁ : ∀ x y → x ≺* y → y *≻ x
   rev-lemma₁ x y (x-hb-y x≺y) = y-hb-x x≺y
-  rev-lemma₁ x y (x-concurrent-y record { ¬x≺y = ¬x≺y ; ¬y≺x = ¬y≺x }) = x-concurrent-y (record { ¬x≺y = ¬x≺y ; ¬y≺x = ¬y≺x })
+  rev-lemma₁ x y (x-concurrent-y  record { ¬x≺y = ¬x≺y ; ¬y≺x = ¬y≺x }) = x-concurrent-y record { ¬x≺y = ¬x≺y ; ¬y≺x = ¬y≺x }
 
 
 
@@ -319,7 +339,43 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
 
   ∃-prefix-suffix (x₁ ∷ x₂ ∷ xs) ys y∷ys↭xs = {!!} , ({!!} , {!!})
 
-  -- END CRUCIAL LEMMA
+
+  ∃-hb-prefix-suffix : ∀ {y} xs ys →
+                       y ∷ ys ↭ xs →
+                       hb-consistent xs →
+                       hb-consistent (y ∷ ys) →
+                       ∃[ prefix ] (∃[ suffix ] xs ≡ suffix ++ y ∷ prefix × concurrent-set (y ∷ suffix))
+
+  ∃-hb-prefix-suffix {y} [] ys y∷ys↭xs hb-xs hb-y∷ys = ⊥-elim (¬x∷xs↭[] y∷ys↭xs)
+  ∃-hb-prefix-suffix {y} (x ∷ []) ys y∷ys↭xs hb-xs hb-y∷ys = [] , ([] , (proof , [-]))
+    where
+      lemma₁ : ∀{x y : A} ys → y ∷ ys ↭ x ∷ [] → ys ≡ []
+      lemma₁ [] fact = refl
+      lemma₁ (x ∷ ys) fact = ⊥-elim (bad↭ fact)
+
+      lemma₂ : ∀{x y : A} ys → y ∷ ys ↭ x ∷ [] → y ≡ x
+      lemma₂ [] fact = ∷-injectiveˡ (↭-singleton-inv fact)
+      lemma₂ (x ∷ ys) fact = ⊥-elim (bad↭ fact)
+      
+      proof : x ∷ [] ≡ [] ++ y ∷ []
+      proof = ↭-singleton-inv (↭-sym (subst₂ _↭_ (cong (y ∷_) (lemma₁ _ y∷ys↭xs)) refl y∷ys↭xs))
+
+  ∃-hb-prefix-suffix {y} (x₁ ∷ x₂ ∷ xs) ys y∷ys↭xs hb-xs hb-y∷ys = {!!}
+    where
+      construction' : ∃[ prefix ] (∃[ suffix ] ((x₁ ∷ x₂ ∷ xs) ≡ suffix ++ y ∷ prefix))
+      construction' = ∃-prefix-suffix (x₁ ∷ x₂ ∷ xs) ys y∷ys↭xs
+
+      prefix = proj₁ construction'
+      suffix = proj₁ (proj₂ construction')
+      equality-proof = proj₂ (proj₂ construction')
+
+      construction : ∃[ prefix ] (∃[ suffix ] ((x₁ ∷ x₂ ∷ xs) ≡ suffix ++ y ∷ prefix × concurrent-set (y ∷ suffix)))
+      construction = prefix , (suffix , (equality-proof , {!!}))
+
+
+
+
+  -- END CRUCIAL LEMMAS
 
 
 
@@ -379,8 +435,26 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
                   concurrent-ops-commute (x ∷ suffix ++ prefix) →
                   concurrent-set (x ∷ suffix) →
                   Unique (x ∷ suffix ++ prefix) →
-                  (∀(s : State) → apply-ops (suffix ++ x ∷ prefix) s ≡ apply-ops (x ∷ suffix ++ prefix) s)
-  cc-ops-cc-set = {!!}      
+                  (∀(s : State) → apply-ops (x ∷ suffix ++ prefix) s ≡ apply-ops (suffix ++ x ∷ prefix) s)
+  cc-ops-cc-set x prefix [] commuting cc-set uniq s = refl
+  cc-ops-cc-set x prefix (x₁ ∷ suffix) commuting cc-set uniq s =
+    begin
+      apply-ops (x ∷ x₁ ∷ suffix ++ prefix) s             ≡⟨⟩
+      (⟨ x ⟩ ◁ ⟨ x₁ ⟩ ◁ (apply-ops (suffix ++ prefix))) s ≡⟨ lemma₁ ⟩
+      (⟨ x₁ ⟩ ◁ ⟨ x ⟩ ◁ (apply-ops (suffix ++ prefix))) s ≡⟨⟩
+      (⟨ x₁ ⟩ ◁ (apply-ops (x ∷ suffix ++ prefix))) s     ≡⟨ cong₂ (λ x' r → r >>= λ z → ⟨ x' ⟩ z) refl ind-hyp ⟩
+      (⟨ x₁ ⟩ ◁ apply-ops (suffix ++ x ∷ prefix)) s       ≡⟨⟩
+      apply-ops (x₁ ∷ suffix ++ x ∷ prefix) s
+    ∎
+      where
+        lemma₁ : (⟨ x ⟩ ◁ ⟨ x₁ ⟩ ◁ (apply-ops (suffix ++ prefix))) s ≡ (⟨ x₁ ⟩ ◁ ⟨ x ⟩ ◁ (apply-ops (suffix ++ prefix))) s
+        lemma₁ = {!!}
+
+        lemma₂ : concurrent-ops-commute (x ∷ suffix ++ prefix) 
+        lemma₂ = cc-ops-commute-∷⁻ x₁ {!!} {!!}
+
+        ind-hyp : apply-ops (x ∷ suffix ++ prefix) s ≡ apply-ops (suffix ++ x ∷ prefix) s
+        ind-hyp = cc-ops-cc-set x prefix suffix lemma₂ {!!} {!!} {!!}
 
   -- Bunch of Lemmas I don't have time to prove
   
@@ -398,23 +472,28 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
   convergence xs .[] xs↭ys cc-xs cc-ys !xs !ys hb-xs Linked.[] s₀ = cong₂ apply-ops (↭-empty-inv xs↭ys) refl
   convergence xs .(_ ∷ []) xs↭ys cc-xs cc-ys !xs !ys hb-xs [-] s₀ = cong₂ apply-ops (↭-singleton-inv xs↭ys) refl
   convergence xs (y₂ ∷ y₁ ∷ ys) xs↭ys cc-xs cc-ys !xs !ys hb-xs (y₂*≻y₁ Linked.∷ hb-y₁∷ys) s₀ =
-    let found-prefix-suffix : ∃[ prefix ]( ∃[ suffix ] xs ≡ suffix ++ y₂ ∷ prefix )
-        found-prefix-suffix = ∃-prefix-suffix xs (y₁ ∷ ys) (↭-sym xs↭ys)
+    let found-prefix-suffix : ∃[ prefix ]( ∃[ suffix ] xs ≡ suffix ++ y₂ ∷ prefix × concurrent-set (y₂ ∷ suffix))
+        found-prefix-suffix = ∃-hb-prefix-suffix xs (y₁ ∷ ys) (↭-sym xs↭ys) hb-xs (y₂*≻y₁ Linked.∷ hb-y₁∷ys)
         prefix = proj₁ found-prefix-suffix
         suffix = proj₁ (proj₂ found-prefix-suffix)
-        xs≡suffix++y₂∷prefix = proj₂ (proj₂ found-prefix-suffix)
+
+        xs≡suffix++y₂∷prefix : xs ≡ suffix ++ y₂ ∷ prefix
+        xs≡suffix++y₂∷prefix = proj₁ (proj₂ (proj₂ found-prefix-suffix))
+
+        cc-set : concurrent-set (y₂ ∷ suffix)
+        cc-set = proj₂ (proj₂ (proj₂ found-prefix-suffix))
 
         fact₀ : concurrent-ops-commute (suffix ++ y₂ ∷ prefix)
-        fact₀ = {!!}
+        fact₀ = subst concurrent-ops-commute xs≡suffix++y₂∷prefix cc-xs
 
         fact₁ : concurrent-ops-commute (y₂ ∷ suffix ++ prefix)
         fact₁ = cc-ops-rearrange₂ _ _ fact₀
 
         fact₂ : concurrent-set (y₂ ∷ suffix)
-        fact₂ = {!!}
+        fact₂ = cc-set
 
         fact₃ : Unique (y₂ ∷ suffix ++ prefix)
-        fact₃ = {!!}
+        fact₃ = unique-permutation {!!} {!!} !xs {!!}
 
         suf++pre↭y₁∷ys : suffix ++ prefix ↭ y₁ ∷ ys
         suf++pre↭y₁∷ys = {!!}
@@ -423,7 +502,7 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
         lemma₁ = cong₂ apply-ops xs≡suffix++y₂∷prefix refl
 
         lemma₂ : apply-ops (suffix ++ y₂ ∷ prefix) s₀ ≡ apply-ops (y₂ ∷ suffix ++ prefix) s₀
-        lemma₂ = cc-ops-cc-set y₂ prefix suffix fact₁ fact₂ fact₃ s₀
+        lemma₂ = sym (cc-ops-cc-set y₂ prefix suffix fact₁ fact₂ fact₃ s₀)
            
         l₁ : concurrent-ops-commute (suffix ++ prefix)
         l₁ = cc-ops-commute-∷⁻ y₂ (suffix ++ prefix) fact₁
@@ -437,10 +516,17 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
         l₃ : Unique (suffix ++ prefix)
         l₃ = unique-permutation _ _ l₄ (↭-sym suf++pre↭y₁∷ys)
 
-        
+        hb-suffix++y₂∷prefix : hb-consistent (suffix ++ y₂ ∷ prefix)
+        hb-suffix++y₂∷prefix = subst hb-consistent xs≡suffix++y₂∷prefix hb-xs
+
+        hb-suffix : hb-consistent suffix
+        hb-suffix = hb-elimˡ suffix (y₂ ∷ prefix) hb-suffix++y₂∷prefix
+
+        hb-prefix : hb-consistent prefix
+        hb-prefix = hb-head-elim (hb-elimʳ suffix (y₂ ∷ prefix) hb-suffix++y₂∷prefix)
 
         l₅ : hb-consistent (suffix ++ prefix)
-        l₅ = {!!}
+        l₅ = ++-linked hb-suffix {!!} hb-prefix
         
         l₆ : hb-consistent (y₁ ∷ ys)
         l₆ = hb-head-elim ((y₂*≻y₁ Linked.∷ hb-y₁∷ys))
@@ -471,14 +557,13 @@ module happens-before (_≈_ : Oper → Oper → Set)  -- equivalence
   record IsSEC (op-history : List Oper → Set)
                (init-state : State)
                : Set where
-
     field
-      causality : ∀ xs → op-history xs → hb-consistent xs
-      distinctness : ∀ xs → op-history xs → Unique xs
+      causality     : ∀ xs → op-history xs → hb-consistent xs
+      distinctness  : ∀ xs → op-history xs → Unique xs
       trunc-history : ∀ x xs → op-history (x ∷ xs) → op-history xs
       commutativity : ∀ xs → op-history xs → concurrent-ops-commute xs
-      no-failure : ∀ x xs state →
-                   op-history (x ∷ xs) →
-                   apply-ops xs init-state ≡ just state →
-                   ⟨ x ⟩ state ≢ nothing
+      no-failure    : ∀ x xs state →
+                      op-history (x ∷ xs) →
+                      apply-ops xs init-state ≡ just state →
+                      ⟨ x ⟩ state ≢ nothing
   

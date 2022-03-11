@@ -43,9 +43,9 @@ record NodeHistory : Set₁ where
   -- A notion of "comes before" in a node history
   data _⊏[_]_ : Event {Msg} → ℕ → Event {Msg} → Set where
 
-    x⊏ᵢy : ∀ x y i
-      → ∃[ xs ](∃[ ys ](∃[ zs ]( xs ++ [ x ] ++ ys ++ [ y ] ++ zs ≡ History i )))
-      → x ⊏[ i ] y
+    x⊏ᵢy : ∀ x y i →
+           ∃[ xs ](∃[ ys ](∃[ zs ]( xs ++ [ x ] ++ ys ++ [ y ] ++ zs ≡ History i ))) →
+           x ⊏[ i ] y
 
 
 -- The proposition that we have a network

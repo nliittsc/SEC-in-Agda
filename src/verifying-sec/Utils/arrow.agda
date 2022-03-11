@@ -4,7 +4,8 @@ module Utils.Arrow where
 open import Data.Maybe using (Maybe; just; nothing; _>>=_)
 
 
-infix 10 _▷_
+infix 4 _▷_
+infixr 4 _◁_
 _▷_ : ∀{A : Set} → (A → Maybe A) → (A → Maybe A) → (A → Maybe A)
 f ▷ g = λ x → f x >>= λ y → g y
 
